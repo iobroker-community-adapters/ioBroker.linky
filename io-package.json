@@ -43,14 +43,8 @@
             "uk": "Зчитуйте дані з розумних лічильників електроенергії Linky",
             "zh-cn": "从 Linky 智能电表读取数据"
         },
-        "authors": [
-            "Robin Rainton <robin@rainton.com>"
-        ],
-        "keywords": [
-            "electricity",
-            "meter",
-            "smartmeter"
-        ],
+        "authors": ["Robin Rainton <robin@rainton.com>"],
+        "keywords": ["electricity", "meter", "smartmeter"],
         "licenseInformation": {
             "type": "free",
             "license": "MIT"
@@ -58,8 +52,8 @@
         "platform": "Javascript/Node.js",
         "icon": "linky.png",
         "enabled": true,
-        "extIcon": "https://raw.githubusercontent.com/Robin Rainton/ioBroker.linky/main/admin/linky.png",
-        "readme": "https://github.com/Robin Rainton/ioBroker.linky/blob/main/README.md",
+        "extIcon": "https://raw.githubusercontent.com/iobroker-community-adapters/ioBroker.linky/main/admin/linky.png",
+        "readme": "https://github.com/iobroker-community-adapters/ioBroker.linky/blob/main/README.md",
         "loglevel": "info",
         "tier": 3,
         "mode": "daemon",
@@ -82,8 +76,7 @@
         ]
     },
     "native": {
-        "option1": true,
-        "option2": "42"
+        "serialPort": ""
     },
     "objects": [],
     "instanceObjects": []
