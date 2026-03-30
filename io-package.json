@@ -1,0 +1,90 @@
+{
+    "common": {
+        "name": "linky",
+        "version": "0.0.1",
+        "news": {
+            "0.0.1": {
+                "en": "initial release",
+                "de": "Erstveröffentlichung",
+                "ru": "Начальная версия",
+                "pt": "lançamento inicial",
+                "nl": "Eerste uitgave",
+                "fr": "Première version",
+                "it": "Versione iniziale",
+                "es": "Versión inicial",
+                "pl": "Pierwsze wydanie",
+                "uk": "Початкова версія",
+                "zh-cn": "首次出版"
+            }
+        },
+        "titleLang": {
+            "en": "Linky",
+            "de": "Linky",
+            "ru": "Линки",
+            "pt": "Linky",
+            "nl": "Linky",
+            "fr": "Lié",
+            "it": "Linky",
+            "es": "enlace",
+            "pl": "Linky",
+            "uk": "Лінкі",
+            "zh-cn": "林奇"
+        },
+        "desc": {
+            "en": "Read data from Linky smart electricity meters",
+            "de": "Lesen Sie Daten von den intelligenten Stromzählern von Linky",
+            "ru": "Чтение данных с интеллектуальных счетчиков электроэнергии Linky",
+            "pt": "Leia dados de medidores de eletricidade inteligentes Linky",
+            "nl": "Gegevens lezen van Linky slimme elektriciteitsmeters",
+            "fr": "Lire les données des compteurs d'électricité intelligents Linky",
+            "it": "Leggi i dati dai contatori elettrici intelligenti Linky",
+            "es": "Leer datos de los medidores de electricidad inteligentes Linky",
+            "pl": "Odczyt danych z inteligentnych liczników energii elektrycznej Linky",
+            "uk": "Зчитуйте дані з розумних лічильників електроенергії Linky",
+            "zh-cn": "从 Linky 智能电表读取数据"
+        },
+        "authors": [
+            "Robin Rainton <robin@rainton.com>"
+        ],
+        "keywords": [
+            "electricity",
+            "meter",
+            "smartmeter"
+        ],
+        "licenseInformation": {
+            "type": "free",
+            "license": "MIT"
+        },
+        "platform": "Javascript/Node.js",
+        "icon": "linky.png",
+        "enabled": true,
+        "extIcon": "https://raw.githubusercontent.com/Robin Rainton/ioBroker.linky/main/admin/linky.png",
+        "readme": "https://github.com/Robin Rainton/ioBroker.linky/blob/main/README.md",
+        "loglevel": "info",
+        "tier": 3,
+        "mode": "daemon",
+        "type": "energy",
+        "compact": true,
+        "connectionType": "local",
+        "dataSource": "push",
+        "adminUI": {
+            "config": "json"
+        },
+        "dependencies": [
+            {
+                "js-controller": ">=6.0.11"
+            }
+        ],
+        "globalDependencies": [
+            {
+                "admin": ">=7.0.23"
+            }
+        ]
+    },
+    "native": {
+        "option1": true,
+        "option2": "42"
+    },
+    "objects": [],
+    "instanceObjects": []
+}
