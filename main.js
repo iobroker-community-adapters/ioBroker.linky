@@ -144,7 +144,10 @@ class Linky extends utils.Adapter {
                 this.retryOpen();
             });
 
-            this.parsePort();
+            this.port.on('open', () => {
+                this.log.debug('Serial port opened');
+                this.parsePort();
+            });
         } catch (error) {
             this.log.error(`Failed to open serial port ${this.config.serialPort}: ${error.message}`);
             this.retryOpen();
@@ -198,61 +201,65 @@ class Linky extends utils.Adapter {
     }
 
     parsePort() {
-        const parser = this.port.pipe(new ReadlineParser({ delimiter: '\n' }));
-        parser.on('data', async data => {
-            // data is a string
-            this.log.silly(data);
+        if (!this.port || !this.port.isOpen) {
+            this.log.error('Cannot parse port because it is not open');
+        } else {
+            const parser = this.port.pipe(new ReadlineParser({ delimiter: '\n' }));
+            parser.on('data', async data => {
+                // data is a string
+                this.log.silly(data);
 
-            const parts = data.split(/\s+/);
-            if (parts.length != 4) {
-                this.log.warn(`Unexpected data: ${parts.length} parts (expected 4)`);
-            } else {
-                const name = parts.shift();
-                const value = parts.shift();
-                const checksum = parts.shift();
-                const theirChecksumInt = checksum.charCodeAt(0);
-
-                // From Teleinfo document, how to calculate checksum:
-                //
-                // Calculate the sum "S1" of all characters from the beginning of the "Label" field up
-                // to and including the delimiter between the "Data" and "Checksum" fields;
-                //
-                // This sum is truncated to 6 bits (this operation is performed using a logical AND with 0x3F);
-                //
-                // To obtain the checksum result, add the previous result S2 to 0x20
-
-                let ourChecksumInt = 0;
-                for (let lp = 0; lp < name.length + value.length + 1; lp++) {
-                    ourChecksumInt += data.charCodeAt(lp);
-                    this.log.silly(`checksum: char ${lp} is ${data.charCodeAt(lp)} so far ${ourChecksumInt}`);
-                }
-                ourChecksumInt = (ourChecksumInt & 0x3f) + 0x20;
-                this.log.silly(`checksum complete: ${ourChecksumInt}`);
-
-                if (ourChecksumInt != theirChecksumInt) {
-                    this.log.warn(`Checksum error. Ours (${ourChecksumInt}) does not match ${theirChecksumInt})`);
+                const parts = data.split(/\s+/);
+                if (parts.length != 4) {
+                    this.log.warn(`Unexpected data: ${parts.length} parts (expected 4)`);
                 } else {
-                    if (ticStateCommon[name] === undefined) {
-                        // We don't know what this field is so ignore it
-                        this.log.warn(`Unknown label (ignoring): ${name}`);
-                    } else if (name === 'ADCO') {
-                        // Store this as last ADCO seen which all following fields belong to.
-                        if (this.adco !== value) {
-                            // Only log if changed.
-                            this.adco = value;
-                            this.log.info(`Found ADCO '${this.adco}'`);
-                            this.setConnected(true);
-                        }
-                        // If we got ADCO, the connection must be alive, so reset the timer.
-                        this.startConnectionTimer();
-                    } else if (this.adco) {
-                        this.checkAndSetState(name, value);
+                    const name = parts.shift();
+                    const value = parts.shift();
+                    const checksum = parts.shift();
+                    const theirChecksumInt = checksum.charCodeAt(0);
+
+                    // From Teleinfo document, how to calculate checksum:
+                    //
+                    // Calculate the sum "S1" of all characters from the beginning of the "Label" field up
+                    // to and including the delimiter between the "Data" and "Checksum" fields;
+                    //
+                    // This sum is truncated to 6 bits (this operation is performed using a logical AND with 0x3F);
+                    //
+                    // To obtain the checksum result, add the previous result S2 to 0x20
+
+                    let ourChecksumInt = 0;
+                    for (let lp = 0; lp < name.length + value.length + 1; lp++) {
+                        ourChecksumInt += data.charCodeAt(lp);
+                        this.log.silly(`checksum: char ${lp} is ${data.charCodeAt(lp)} so far ${ourChecksumInt}`);
+                    }
+                    ourChecksumInt = (ourChecksumInt & 0x3f) + 0x20;
+                    this.log.silly(`checksum complete: ${ourChecksumInt}`);
+
+                    if (ourChecksumInt != theirChecksumInt) {
+                        this.log.warn(`Checksum error. Ours (${ourChecksumInt}) does not match ${theirChecksumInt})`);
                     } else {
-                        this.log.warn(`Received ${name} ${value} but no ADCO known yet`);
+                        if (ticStateCommon[name] === undefined) {
+                            // We don't know what this field is so ignore it
+                            this.log.warn(`Unknown label (ignoring): ${name}`);
+                        } else if (name === 'ADCO') {
+                            // Store this as last ADCO seen which all following fields belong to.
+                            if (this.adco !== value) {
+                                // Only log if changed.
+                                this.adco = value;
+                                this.log.info(`Found ADCO '${this.adco}'`);
+                                this.setConnected(true);
+                            }
+                            // If we got ADCO, the connection must be alive, so reset the timer.
+                            this.startConnectionTimer();
+                        } else if (this.adco) {
+                            this.checkAndSetState(name, value);
+                        } else {
+                            this.log.warn(`Received ${name} ${value} but no ADCO known yet`);
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
     }
 
     /**
