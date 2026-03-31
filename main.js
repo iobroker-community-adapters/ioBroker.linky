@@ -8,8 +8,49 @@
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
 
-// Load your modules here, e.g.:
-// const fs = require('fs');
+const { SerialPort } = require('serialport');
+const { ReadlineParser } = require('@serialport/parser-readline');
+
+const connectionTimeoutMs = 30 * 1000;
+const portRetryDelayMs = 5 * 1000;
+
+// Types, units of TIC fields
+// TODO: add descriptions with translations
+// TODO: add tri-phase
+// TODO: add 'standard' mode
+const ticStateCommon = {
+    ADCO: { type: 'string' },
+    OPTARIF: { type: 'string' },
+    ISOUSC: { type: 'number', unit: 'A', role: 'value.current' },
+    BASE: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+
+    HCHC: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+    HCHP: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+
+    EJPHN: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+    EJPHPM: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+
+    BBRHCJB: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+    BBRHPJB: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+    BBRHCJW: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+    BBRHPJW: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+    BBRHCJR: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+    BBRHPJR: { type: 'number', unit: 'Wh', role: 'value.power.consumption' },
+
+    PEJP: { type: 'number' /* In minutes */ },
+
+    PTEC: { type: 'string' },
+    DEMAIN: { type: 'string' },
+
+    IINST: { type: 'number', unit: 'A', role: 'value.current' },
+    ADPS: { type: 'number', unit: 'A', role: 'value.current' },
+    IMAX: { type: 'number', unit: 'A', role: 'value.current' },
+
+    PAPP: { type: 'number', unit: 'VA' }, // TODO: no role for VA documented
+
+    HHPHC: { type: 'string' },
+    MOTDETAT: { type: 'string' },
+};
 
 class Linky extends utils.Adapter {
     /**
@@ -21,71 +62,176 @@ class Linky extends utils.Adapter {
             name: 'linky',
         });
         this.on('ready', this.onReady.bind(this));
-        this.on('stateChange', this.onStateChange.bind(this));
-        // this.on('objectChange', this.onObjectChange.bind(this));
-        // this.on('message', this.onMessage.bind(this));
         this.on('unload', this.onUnload.bind(this));
+        this.port = null;
+        this.adco = null;
+        this.connectionTimeout = null;
+        this.portRetryTimer = null;
+    }
+
+    // Set/reset connection
+    setConnected(connected) {
+        this.setState('info.connection', connected, true);
+        if (!connected) {
+            this.adco = null;
+            if (this.connectionTimeout) {
+                this.clearTimeout(this.connectionTimeout);
+                this.connectionTimeout = null;
+            }
+        }
+    }
+
+    // Set connection timer
+    startConnectionTimer() {
+        if (this.connectionTimeout) {
+            this.clearTimeout(this.connectionTimeout);
+        }
+        this.connectionTimeout = this.setTimeout(() => {
+            this.connectionTimeout = null;
+            this.log.warn(`Connection timeout for ${this.adco}`);
+            this.setConnected(false);
+        }, connectionTimeoutMs);
+    }
+
+    retryOpen() {
+        this.log.debug(`Retrying port open ${this.config.serialPort} in ${portRetryDelayMs} ms`);
+        this.portRetryTimer = this.setTimeout(() => {
+            this.portRetryTimer = null;
+            this.openPort();
+        }, portRetryDelayMs);
+    }
+
+    openPort() {
+        this.log.info(`Opening serial port: ${this.config.serialPort}`);
+
+        try {
+            this.port = new SerialPort({
+                path: this.config.serialPort,
+                baudRate: 1200,
+                dataBits: 7,
+                parity: 'even',
+            });
+
+            this.port.on('error', error => {
+                this.log.error(`Serial port error: ${error.message}`);
+                this.port = null;
+                this.setConnected(false);
+                this.retryOpen();
+            });
+
+            this.parsePort();
+        } catch (error) {
+            this.log.error(`Failed to open serial port ${this.config.serialPort}: ${error.message}`);
+            this.retryOpen();
+        }
+    }
+
+    async parsePort() {
+        const parser = this.port.pipe(new ReadlineParser({ delimiter: '\n' }));
+        var nameValueCache = [];
+        parser.on('data', async data => {
+            // data is a string
+            this.log.silly(data);
+
+            const parts = data.split(/\s+/);
+            if (parts.length != 4) {
+                this.log.warn(`Unexpected data: ${parts.length} parts (expected 4)`);
+            } else {
+                const name = parts.shift();
+                const value = parts.shift();
+                const checksum = parts.shift();
+                const theirChecksumInt = checksum.charCodeAt(0);
+
+                // From Teleinfo document, how to calculate checksum:
+                //
+                // Calculate the sum "S1" of all characters from the beginning of the "Label" field up
+                // to and including the delimiter between the "Data" and "Checksum" fields;
+                //
+                // This sum is truncated to 6 bits (this operation is performed using a logical AND with 0x3F);
+                //
+                // To obtain the checksum result, add the previous result S2 to 0x20
+
+                let ourChecksumInt = 0;
+                for (let lp = 0; lp < name.length + value.length + 1; lp++) {
+                    ourChecksumInt += data.charCodeAt(lp);
+                    this.log.silly(`checksum: char ${lp} is ${data.charCodeAt(lp)} so far ${ourChecksumInt}`);
+                }
+                ourChecksumInt = (ourChecksumInt & 0x3f) + 0x20;
+                this.log.silly(`checksum complete: ${ourChecksumInt}`);
+
+                if (ourChecksumInt != theirChecksumInt) {
+                    this.log.warn(`Checksum error. Ours (${ourChecksumInt}) does not match ${theirChecksumInt})`);
+                } else {
+                    // TODO: Does the protocol cater for multiple ADCO values in the same stream?
+                    if (name === 'ADCO') {
+                        if (this.adco !== value) {
+                            this.adco = value;
+                            this.log.info(`Found ID '${this.adco}'`);
+                            this.setConnected(true);
+                        }
+                        // If we got ADCO, the connection must be alive, so reset the timer.
+                        this.startConnectionTimer();
+                    }
+
+                    if (ticStateCommon[name] === undefined) {
+                        // We don't know what this field is so ignore it
+                        this.log.warn(`Unknown label (ignoring): ${name}`);
+                    } else if (nameValueCache[name] === value) {
+                        // Nothing has changed since the last time, do nothing
+                    } else if (this.adco) {
+                        // Only create/set objects if the channel (adco) is known.
+                        try {
+                            await this.setObjectNotExists(this.adco, {
+                                type: 'channel',
+                                common: {
+                                    name: this.adco,
+                                },
+                                native: {},
+                            });
+                        } catch (error) {
+                            this.log.error(`Failed to create channel for ${this.adco}: ${error.message}`);
+                        }
+
+                        // Label known & new value so create channel/state set value
+                        nameValueCache[name] = value;
+                        const stateName = `${this.adco}.${name}`;
+
+                        try {
+                            this.setObjectNotExists(stateName, {
+                                type: 'state',
+                                common: ticStateCommon[name],
+                                native: {},
+                                // TODO: other attributes?
+                            });
+                        } catch (error) {
+                            this.log.error(`Failed to create state for ${stateName}: ${error.message}`);
+                        }
+
+                        try {
+                            this.setState(stateName, {
+                                ack: true,
+                                val: ticStateCommon[name].type === 'number' ? Number(value) : value,
+                            });
+                        } catch (error) {
+                            this.log.error(`Failed to set state value ${stateName} -> ${value}: ${error.message}`);
+                        }
+                    }
+                }
+            }
+        });
     }
 
     /**
      * Is called when databases are connected and adapter received configuration.
      */
     async onReady() {
-        // Initialize your adapter here
-
-        // The adapters config (in the instance object everything under the attribute "native") is accessible via
-        // this.config:
-        this.log.debug('config option1: ${this.config.option1}');
-        this.log.debug('config option2: ${this.config.option2}');
-
-        /*
-        For every state in the system there has to be also an object of type state
-        Here a simple template for a boolean variable named "testVariable"
-        Because every adapter instance uses its own unique namespace variable names can't collide with other adapters variables
-
-        IMPORTANT: State roles should be chosen carefully based on the state's purpose.
-                   Please refer to the state roles documentation for guidance:
-                   https://www.iobroker.net/#en/documentation/dev/stateroles.md
-        */
-        await this.setObjectNotExistsAsync('testVariable', {
-            type: 'state',
-            common: {
-                name: 'testVariable',
-                type: 'boolean',
-                role: 'indicator',
-                read: true,
-                write: true,
-            },
-            native: {},
-        });
-
-        // In order to get state updates, you need to subscribe to them. The following line adds a subscription for our variable we have created above.
-        this.subscribeStates('testVariable');
-        // You can also add a subscription for multiple states. The following line watches all states starting with "lights."
-        // this.subscribeStates('lights.*');
-        // Or, if you really must, you can also watch all states. Don't do this if you don't need to. Otherwise this will cause a lot of unnecessary load on the system:
-        // this.subscribeStates('*');
-
-        /*
-            setState examples
-            you will notice that each setState will cause the stateChange event to fire (because of above subscribeStates cmd)
-        */
-        // the variable testVariable is set to true as command (ack=false)
-        await this.setState('testVariable', true);
-
-        // same thing, but the value is flagged "ack"
-        // ack should be always set to true if the value is received from or acknowledged from the target system
-        await this.setState('testVariable', { val: true, ack: true });
-
-        // same thing, but the state is deleted after 30s (getState will return null afterwards)
-        await this.setState('testVariable', { val: true, ack: true, expire: 30 });
-
-        // examples for the checkPassword/checkGroup functions
-        const pwdResult = await this.checkPasswordAsync('admin', 'iobroker');
-        this.log.info(`check user admin pw iobroker: ${pwdResult}`);
-
-        const groupResult = await this.checkGroupAsync('admin', 'admin');
-        this.log.info(`check group user admin group admin: ${groupResult}`);
+        this.setConnected(false);
+        if (!this.config.serialPort) {
+            this.log.error('No serial port configured! Please define the serial port in adapter settings.');
+            this.disable();
+        } else {
+            this.openPort();
+        }
     }
 
     /**
@@ -95,76 +241,25 @@ class Linky extends utils.Adapter {
      */
     onUnload(callback) {
         try {
-            // Here you must clear all timeouts or intervals that may still be active
-            // clearTimeout(timeout1);
-            // clearTimeout(timeout2);
-            // ...
-            // clearInterval(interval1);
-
-            callback();
+            if (this.portRetryTimer) {
+                this.clearTimeout(this.portRetryTimer);
+                this.portRetryTimer = null;
+            }
+            if (this.port) {
+                this.port.close(() => {
+                    this.log.info(`Closed serial port: ${this.config.serialPort}`);
+                    this.port = null;
+                    this.setConnected(false);
+                    callback();
+                });
+            } else {
+                callback();
+            }
         } catch (error) {
             this.log.error(`Error during unloading: ${error.message}`);
             callback();
         }
     }
-
-    // If you need to react to object changes, uncomment the following block and the corresponding line in the constructor.
-    // You also need to subscribe to the objects with `this.subscribeObjects`, similar to `this.subscribeStates`.
-    // /**
-    //  * Is called if a subscribed object changes
-    //  * @param {string} id
-    //  * @param {ioBroker.Object | null | undefined} obj
-    //  */
-    // onObjectChange(id, obj) {
-    //     if (obj) {
-    //         // The object was changed
-    //         this.log.info(`object ${id} changed: ${JSON.stringify(obj)}`);
-    //     } else {
-    //         // The object was deleted
-    //         this.log.info(`object ${id} deleted`);
-    //     }
-    // }
-
-    /**
-     * Is called if a subscribed state changes
-     *
-     * @param {string} id - State ID
-     * @param {ioBroker.State | null | undefined} state - State object
-     */
-    onStateChange(id, state) {
-        if (state) {
-            // The state was changed
-            this.log.info(`state ${id} changed: ${state.val} (ack = ${state.ack})`);
-
-            if (state.ack === false) {
-                // This is a command from the user (e.g., from the UI or other adapter)
-                // and should be processed by the adapter
-                this.log.info(`User command received for ${id}: ${state.val}`);
-
-                // TODO: Add your control logic here
-            }
-        } else {
-            // The object was deleted or the state value has expired
-            this.log.info(`state ${id} deleted`);
-        }
-    }
-    // If you need to accept messages in your adapter, uncomment the following block and the corresponding line in the constructor.
-    // /**
-    //  * Some message was sent to this instance over message box. Used by email, pushover, text2speech, ...
-    //  * Using this method requires "common.messagebox" property to be set to true in io-package.json
-    //  * @param {ioBroker.Message} obj
-    //  */
-    // onMessage(obj) {
-    //     if (typeof obj === 'object' && obj.message) {
-    //         if (obj.command === 'send') {
-    //             // e.g. send email or pushover or whatever
-    //             this.log.info('send command');
-
-    //             // Send response in callback if required
-    //             if (obj.callback) this.sendTo(obj.from, obj.command, 'Message received', obj.callback);
-    //         }
-    //     }
-    // }
 }
 
 if (require.main !== module) {
