@@ -9,8 +9,6 @@ updates:
       timezone: 'Europe/Berlin'
       cronjob: '55 2 28 * *'
     open-pull-requests-limit: 15
-    assignees:
-      - 'Robin Rainton'
     versioning-strategy: 'increase'
 
   - package-ecosystem: 'github-actions'
@@ -20,5 +18,3 @@ updates:
       timezone: 'Europe/Berlin'
       cronjob: '55 2 28 * *'
     open-pull-requests-limit: 15
-    assignees:
-      - 'Robin Rainton'
