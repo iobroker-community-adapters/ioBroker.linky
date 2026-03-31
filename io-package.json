@@ -57,7 +57,8 @@
       "zh-cn": "从 Linky 智能电表读取数据"
     },
     "authors": [
-      "Robin Rainton <robin@rainton.com>"
+      "Robin Rainton <robin@rainton.com>",
+      "iobroker-community-adapters <iobroker-community-adapters@gmx.de>"
     ],
     "keywords": [
       "electricity",
@@ -90,7 +91,7 @@
     ],
     "globalDependencies": [
       {
-        "admin": ">=7.0.23"
+        "admin": ">=7.7.22"
       }
     ]
   },
