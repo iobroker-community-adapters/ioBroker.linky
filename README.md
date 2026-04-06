@@ -22,9 +22,10 @@ Read data from Linky smart electricity meters, in fact any meter supporting the 
 
 ### **WORK IN PROGRESS**
 - (copilot) Adapter requires admin >= 7.7.22 now
+- (raintonr) Added layout options
 
 ### 0.0.2 (2026-03-31)
-* (Robin Rainton) initial release
+- (raintonr) initial release
 
 ## License
 MIT License
