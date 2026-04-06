@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "linky",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "news": {
+      "0.0.3": {
+        "en": "Adapter requires admin >= 7.7.22 now\nAdded layout options",
+        "de": "Adapter benötigt admin >= 7.7.22 jetzt\nLayoutoptionen hinzufügen",
+        "ru": "Адаптер требует администратора >= 7.7.22\nДобавлены варианты макета",
+        "pt": "Adaptador requer admin >= 7.7.22 agora\nOpções de disposição adicionadas",
+        "nl": "Adapter vereist admin < 7.7.22 nu\nOpmaakopties toegevoegd",
+        "fr": "Adaptateur nécessite admin >= 7.7.22 maintenant\nAjout d'options de mise en page",
+        "it": "Adattatore richiede admin >= 7.7.22 ora\nOpzioni di layout",
+        "es": "El adaptador requiere administrador= 7.7.22 ahora\nOpciones de diseño adicionales",
+        "pl": "Adapter wymaga admin > = 7.7.22\nDodano opcje układu",
+        "uk": "Адаптер вимагає адмін >= 7.7.22 тепер\nДодаткові параметри макета",
+        "zh-cn": "适任者需要管理员 \\ 7.7.22 现在\n添加布局选项"
+      },
       "0.0.2": {
         "en": "initial release",
         "de": "erstausstrahlung",

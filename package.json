@@ -1,6 +1,6 @@
 {
   "name": "iobroker.linky",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Read data from Linky smart electricity meters",
   "author": "Robin Rainton <robin@rainton.com>",
   "contributors": [
